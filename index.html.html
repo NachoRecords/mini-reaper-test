@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mini REAPER - Test de Plugins JS</title>
+<style>
+  :root{
+    --bg:#1e1e1e; --panel:#2a2a2a; --panel2:#242424;
+    --border:#3a3a3a; --text:#d4d4d4; --accent:#4a90d9;
+    --mono:#e0a030; --stereo:#40b070; --master:#c05050;
+    --btn:#383838; --btnHover:#4a4a4a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:'Segoe UI',system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+    height:100vh; display:flex; flex-direction:column;
+    overflow:hidden; font-size:12px;
+  }
+  header{
+    background:var(--panel); padding:8px 12px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:12px;
+  }
+  header h1{font-size:13px; font-weight:500; letter-spacing:.5px;}
+  header h1 span{color:var(--accent);}
+  .transport{display:flex; gap:6px; margin-left:auto; align-items:center;}
+  button{
+    background:var(--btn); color:var(--text); border:1px solid var(--border);
+    padding:4px 10px; border-radius:3px; cursor:pointer; font-size:11px;
+    transition:.15s; font-family:inherit;
+  }
+  button:hover{background:var(--btnHover);}
+  button.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+
+  .mixer{
+    flex:1; display:flex; gap:1px; background:var(--border);
+    overflow-x:auto; padding:0;
+  }
+  .track{
+    flex:0 0 220px; background:var(--panel);
+    display:flex; flex-direction:column; padding:8px;
+    gap:8px; min-width:220px;
+  }
+  .track.master{flex:0 0 240px; background:var(--panel2); border-left:2px solid var(--master);}
+  .track-header{
+    display:flex; justify-content:space-between; align-items:center;
+    padding-bottom:6px; border-bottom:1px solid var(--border);
+  }
+  .track-name{font-weight:600; font-size:11px; letter-spacing:.5px;}
+  .track.mono .track-name{color:var(--mono);}
+  .track.stereo .track-name{color:var(--stereo);}
+  .track.master .track-name{color:var(--master);}
+  .badge{font-size:9px; padding:1px 5px; border-radius:2px; background:var(--btn);}
+
+  .drop-zone{
+    border:1px dashed var(--border); border-radius:4px;
+    padding:10px; text-align:center; font-size:10px;
+    color:#888; cursor:pointer; transition:.15s;
+  }
+  .drop-zone:hover, .drop-zone.drag{background:var(--panel2); border-color:var(--accent); color:var(--text);}
+  .audio-name{font-size:10px; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .meter{
+    height:6px; background:#111; border-radius:2px; overflow:hidden; position:relative;
+  }
+  .meter-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg,#40b070,#e0c030,#e05050);
+    transition:width .05s;
+  }
+
+  .fader{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:4px; background:#111; border-radius:2px; outline:none;
+  }
+  .fader::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px;
+    background:var(--accent); border-radius:50%; cursor:pointer;
+  }
+  .fader::-moz-range-thumb{
+    width:14px; height:14px; background:var(--accent);
+    border-radius:50%; cursor:pointer; border:none;
+  }
+
+  .row{display:flex; gap:4px; align-items:center;}
+  .row label{font-size:10px; color:#999; min-width:28px;}
+  .value{font-size:10px; color:#bbb; min-width:38px; text-align:right; font-variant-numeric:tabular-nums;}
+
+  .plugin-slot{
+    background:var(--panel2); border:1px solid var(--border);
+    border-radius:3px; padding:4px 6px; font-size:10px;
+    display:flex; justify-content:space-between; align-items:center;
+    gap:4px;
+  }
+  .plugin-slot .name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .plugin-slot .x{cursor:pointer; color:#888; padding:0 3px;}
+  .plugin-slot .x:hover{color:#ff6b6b;}
+
+  .plugins-list{display:flex; flex-direction:column; gap:3px; max-height:200px; overflow-y:auto;}
+  .add-plug{
+    font-size:10px; padding:3px; text-align:center;
+    background:transparent; border:1px dashed var(--border); color:#777;
+    border-radius:3px; cursor:pointer; font-family:inherit;
+  }
+  .add-plug:hover{color:var(--accent); border-color:var(--accent);}
+
+  .mute-solo{display:flex; gap:3px;}
+  .mute-solo button{flex:1; padding:3px 0; font-size:10px;}
+
+  /* Panel de parámetros inline */
+  .plugin-editor{
+    background:#1a1a1a; border:1px solid var(--accent);
+    border-radius:3px; padding:6px; font-size:10px;
+    display:flex; flex-direction:column; gap:5px;
+    max-height:220px; overflow-y:auto;
+  }
+  .plugin-editor .title{
+    font-weight:600; color:var(--accent); margin-bottom:2px;
+    display:flex; justify-content:space-between;
+  }
+  .plugin-editor .title .close{cursor:pointer; color:#888;}
+  .plugin-editor .title .close:hover{color:#ff6b6b;}
+  .param-row{display:flex; flex-direction:column; gap:1px;}
+  .param-row .lbl{display:flex; justify-content:space-between; color:#aaa;}
+  .param-row input[type="range"]{
+    -webkit-appearance:none; appearance:none;
+    width:100%; height:3px; background:#333; border-radius:2px; outline:none;
+  }
+  .param-row input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:11px; height:11px;
+    background:var(--accent); border-radius:50%; cursor:pointer;
+  }
+  .param-row input[type="range"]::-moz-range-thumb{
+    width:11px; height:11px; background:var(--accent);
+    border-radius:50%; cursor:pointer; border:none;
+  }
+  .param-row select{
+    background:#2a2a2a; color:var(--text); border:1px solid var(--border);
+    font-size:10px; padding:1px; border-radius:2px; font-family:inherit;
+  }
+
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--btn); border-radius:4px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--btnHover);}
+
+  input[type="file"]{display:none;}
+
+  .status{
+    background:#111; border-top:1px solid var(--border);
+    padding:4px 10px; font-size:10px; color:#888;
+    display:flex; gap:16px;
+  }
+  .status .ok{color:#40b070;}
+  .status .err{color:#e05050;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎛️ Mini<span>REAPER</span> · Plugin Test Bench</h1>
+  <div class="transport">
+    <button id="btnPlay" class="active">▶ Play</button>
+    <button id="btnStop">■ Stop</button>
+    <button id="btnPanic">⚠ Panic</button>
+  </div>
+</header>
+
+<div class="mixer" id="mixer"></div>
+<div class="status">
+  <span id="statusText">Cargando AudioWorklet...</span>
+</div>
+
+<script type="module">
+/* ============================================================
+   CONFIGURACIÓN DE TRACKS
+============================================================ */
+const TRACK_DEFS = [
+  { id:0, name:'Track 1', type:'mono',   channels:1, color:'var(--mono)' },
+  { id:1, name:'Track 2', type:'mono',   channels:1, color:'var(--mono)' },
+  { id:2, name:'Track 3', type:'stereo', channels:2, color:'var(--stereo)' },
+  { id:3, name:'Track 4', type:'stereo', channels:2, color:'var(--stereo)' },
+  { id:4, name:'MASTER',  type:'master', channels:2, color:'var(--master)' }
+];
+
+/* ============================================================
+   MOTOR DE AUDIO
+============================================================ */
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const ctx = new AudioContext();
+const masterGain = ctx.createGain();
+const masterAnalyser = ctx.createAnalyser();
+masterAnalyser.fftSize = 256;
+masterGain.connect(masterAnalyser).connect(ctx.destination);
+
+const statusText = document.getElementById('statusText');
+
+// Registrar el AudioWorklet (obligatorio para cargar Dis-Treasure)
+let workletLoaded = false;
+try {
+  await ctx.audioWorklet.addModule('worklets/dis-treasure.js');
+  workletLoaded = true;
+  statusText.innerHTML = '<span class="ok">✓ AudioWorklet cargado (Dis-Treasure disponible)</span>';
+} catch (err) {
+  statusText.innerHTML = '<span class="err">✗ Error al cargar AudioWorklet: ' + err.message + ' (sirve el archivo desde http://, no file://)</span>';
+  console.error(err);
+}
+
+const tracks = TRACK_DEFS.map(def => {
+  const input = ctx.createGain();
+  const gain  = ctx.createGain();
+  const panner = ctx.createStereoPanner();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+
+  input.connect(gain).connect(panner).connect(analyser);
+  if (def.type !== 'master') analyser.connect(masterGain);
+  else analyser.connect(masterAnalyser);
+
+  const pluginChain = {
+    nodes: [],
+    rebuild(){
+      input.disconnect();
+      let prev = input;
+      this.nodes.forEach(n => { prev.connect(n.node); prev = n.node; });
+      prev.connect(gain);
+    }
+  };
+
+  return {
+    ...def,
+    input, gain, panner, analyser,
+    source: null, buffer: null,
+    volume: 0.8, pan: 0,
+    muted: false, solo: false,
+    plugins: [],
+    pluginChain,
+    ui: {}
+  };
+});
+
+/* ============================================================
+   PLUGINS DISPONIBLES
+   Cada plugin devuelve { node, params }
+   params: [{ name, min, max, step, value, set(v), type?, options? }]
+============================================================ */
+const PLUGINS = {
+  'Gain': () => {
+    const n = ctx.createGain();
+    n.gain.value = 0.8;
+    return { node:n, params:[
+      {name:'gain', min:0, max:2, step:0.01, value:0.8, set:v=>n.gain.value=v}
+    ]};
+  },
+  'Biquad LPF': () => {
+    const n = ctx.createBiquadFilter();
+    n.type='lowpass'; n.frequency.value=2000; n.Q.value=1;
+    return { node:n, params:[
+      {name:'freq', min:20, max:20000, step:10, value:2000, set:v=>n.frequency.value=v},
+      {name:'Q',    min:0.1, max:20, step:0.1, value:1, set:v=>n.Q.value=v}
+    ]};
+  },
+  'Biquad HPF': () => {
+    const n = ctx.createBiquadFilter();
+    n.type='highpass'; n.frequency.value=100;
+    return { node:n, params:[
+      {name:'freq', min:20, max:20000, step:10, value:100, set:v=>n.frequency.value=v}
+    ]};
+  },
+  'Distortion': () => {
+    const n = ctx.createWaveShaper();
+    const makeCurve = (amt) => {
+      const k = amt, N = 44100, curve = new Float32Array(N);
+      for(let i=0;i<N;i++){
+        const x = (i*2)/N - 1;
+        curve[i] = ((3+k)*x*20*Math.PI/180)/(Math.PI + k*Math.abs(x));
+      }
+      return curve;
+    };
+    n.curve = makeCurve(20); n.oversample='4x';
+    return { node:n, params:[
+      {name:'drive', min:0, max:100, step:1, value:20, set:v=>{ n.curve = makeCurve(v); }}
+    ]};
+  },
+  'Delay': () => {
+    const input = ctx.createGain();
+    const delay = ctx.createDelay(2);
+    const fb = ctx.createGain();
+    const wet = ctx.createGain();
+    const dry = ctx.createGain();
+    delay.delayTime.value=0.3; fb.gain.value=0.35; wet.gain.value=0.4; dry.gain.value=1;
+    input.connect(delay); delay.connect(fb); fb.connect(delay);
+    const out = ctx.createGain();
+    delay.connect(wet); wet.connect(out);
+    input.connect(dry); dry.connect(out);
+    return { node:input, params:[
+      {name:'time', min:0, max:2, step:0.01, value:0.3, set:v=>delay.delayTime.value=v},
+      {name:'fb',   min:0, max:0.95, step:0.01, value:0.35, set:v=>fb.gain.value=v},
+      {name:'wet',  min:0, max:1, step:0.01, value:0.4, set:v=>wet.gain.value=v}
+    ], _out: out };
+  },
+  'Tremolo': () => {
+    const n = ctx.createGain();
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value=5; lfoGain.gain.value=0.5;
+    lfo.connect(lfoGain).connect(n.gain);
+    n.gain.value=0.5; lfo.start();
+    return { node:n, params:[
+      {name:'rate',  min:0.1, max:20, step:0.1, value:5, set:v=>lfo.frequency.value=v},
+      {name:'depth', min:0, max:1, step:0.01, value:0.5, set:v=>lfoGain.gain.value=v}
+    ]};
+  },
+
+  /* ============================================================
+     DIS-TREASURE (Tukan) — Port del JSFX original a AudioWorklet
+     ============================================================ */
+  'Dis-Treasure (Tukan)': () => {
+    if (!workletLoaded){
+      alert('El AudioWorklet no se cargó. Revisa la consola y sirve por http://');
+      throw new Error('Worklet no disponible');
+    }
+    const node = new AudioWorkletNode(ctx, 'dis-treasure', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
+      channelCount: 2,
+      channelCountMode: 'explicit'
+    });
+
+    // Meter GR: el worklet envía un mensaje por bloque con el valor actual
+    let grValue = 1;
+    node.port.onmessage = (e) => { grValue = e.data.gr; };
+    node._getGR = () => grValue;
+
+    // Helper: obtiene el AudioParam por nombre
+    const P = (name) => node.parameters.get(name);
+
+    return {
+      node,
+      params: [
+        { name:'Ratio (1-8)',     min:1,    max:8,    step:1,     value:4,   set:v=>P('ratio').value=v,     type:'int' },
+        { name:'In Gain',         min:0,    max:10,   step:0.01,  value:5,   set:v=>P('inGain').value=v },
+        { name:'Out Gain',        min:0,    max:10,   step:0.01,  value:5,   set:v=>P('outGain').value=v },
+        { name:'Attack (ms)',     min:0.05, max:30,   step:0.05,  value:15,  set:v=>P('attack').value=v },
+        { name:'Release (ms)',    min:50,   max:1500, step:10,    value:775, set:v=>P('release').value=v },
+        { name:'HPF Detect',      min:0,    max:1,    step:1,     value:0,   set:v=>P('hpfDet').value=v,   type:'bool' },
+        { name:'HPF Audio',       min:0,    max:1,    step:1,     value:0,   set:v=>P('hpfAudio').value=v, type:'bool' },
+        { name:'Peak Detect',     min:0,    max:1,    step:1,     value:0,   set:v=>P('peakDet').value=v,  type:'bool' },
+        { name:'Dist Type (0-2)', min:0,    max:2,    step:1,     value:0,   set:v=>P('distType').value=v, type:'int' },
+        { name:'Feedback',        min:0,    max:1,    step:1,     value:0,   set:v=>P('fback').value=v,    type:'bool' },
+        { name:'Headroom (dB)',   min:-20,  max:20,   step:1,     value:0,   set:v=>P('headroom').value=v, type:'int' },
+        { name:'Interact',        min:0,    max:1,    step:1,     value:0,   set:v=>P('interact').value=v, type:'bool' },
+        { name:'SC Listen',       min:0,    max:1,    step:1,     value:0,   set:v=>P('scListen').value=v, type:'bool' },
+        { name:'Bypass',          min:0,    max:1,    step:1,     value:0,   set:v=>P('bypass').value=v,   type:'bool' }
+      ]
+    };
+  }
+};
+
+/* ============================================================
+   UI
+============================================================ */
+const mixer = document.getElementById('mixer');
+
+tracks.forEach(t => {
+  const el = document.createElement('div');
+  el.className = 'track ' + t.type;
+  el.innerHTML = `
+    <div class="track-header">
+      <span class="track-name">${t.name}</span>
+      <span class="badge">${t.channels === 1 ? 'MONO' : 'STEREO'}</span>
+    </div>
+
+    ${t.type !== 'master' ? `
+      <div class="drop-zone" data-id="${t.id}">
+        <div>📁 Cargar audio</div>
+        <div class="audio-name" data-name="${t.id}"></div>
+      </div>
+      <input type="file" accept="audio/*" data-file="${t.id}">
+      <div class="mute-solo">
+        <button data-mute="${t.id}">M</button>
+        <button data-solo="${t.id}">S</button>
+      </div>
+    ` : ''}
+
+    <div class="meter"><div class="meter-fill" data-meter="${t.id}"></div></div>
+
+    <div class="row">
+      <label>VOL</label>
+      <input class="fader" type="range" min="0" max="1.5" step="0.01" value="${t.volume}" data-vol="${t.id}">
+      <span class="value" data-volval="${t.id}">${Math.round(t.volume*100)}</span>
+    </div>
+
+    <div class="row">
+      <label>PAN</label>
+      <input class="fader" type="range" min="-1" max="1" step="0.01" value="0" data-pan="${t.id}">
+      <span class="value" data-panval="${t.id}">C</span>
+    </div>
+
+    <div class="plugins-list" data-plugins="${t.id}"></div>
+    <button class="add-plug" data-add="${t.id}">+ Añadir plugin</button>
+    <div data-editor="${t.id}"></div>
+  `;
+  mixer.appendChild(el);
+  t.ui.el = el;
+  t.ui.meter = el.querySelector(`[data-meter="${t.id}"]`);
+  t.ui.editor = el.querySelector(`[data-editor="${t.id}"]`);
+
+  if(t.type !== 'master'){
+    const drop = el.querySelector('.drop-zone');
+    const file = el.querySelector('input[type=file]');
+    drop.onclick = () => file.click();
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault(); drop.classList.remove('drag');
+      if(e.dataTransfer.files[0]) loadAudio(t, e.dataTransfer.files[0]);
+    });
+    file.onchange = e => { if(e.target.files[0]) loadAudio(t, e.target.files[0]); };
+
+    el.querySelector(`[data-mute="${t.id}"]`).onclick = (e) => {
+      t.muted = !t.muted; e.target.classList.toggle('active', t.muted); applyGains();
+    };
+    el.querySelector(`[data-solo="${t.id}"]`).onclick = (e) => {
+      t.solo = !t.solo; e.target.classList.toggle('active', t.solo); applyGains();
+    };
+  }
+
+  const volSlider = el.querySelector(`[data-vol="${t.id}"]`);
+  const volVal = el.querySelector(`[data-volval="${t.id}"]`);
+  volSlider.oninput = () => {
+    t.volume = +volSlider.value;
+    volVal.textContent = Math.round(t.volume*100);
+    applyGains();
+  };
+
+  const panSlider = el.querySelector(`[data-pan="${t.id}"]`);
+  const panVal = el.querySelector(`[data-panval="${t.id}"]`);
+  panSlider.oninput = () => {
+    t.pan = +panSlider.value;
+    t.panner.pan.value = t.pan;
+    panVal.textContent = t.pan === 0 ? 'C'
+      : (t.pan < 0 ? 'L'+Math.round(-t.pan*100) : 'R'+Math.round(t.pan*100));
+  };
+
+  el.querySelector(`[data-add="${t.id}"]`).onclick = () => showPluginMenu(t);
+
+  renderPlugins(t);
+});
+
+/* ============================================================
+   CARGA DE AUDIO
+============================================================ */
+async function loadAudio(t, file){
+  const arr = await file.arrayBuffer();
+  const buf = await ctx.decodeAudioData(arr);
+
+  let finalBuf = buf;
+  if(t.channels === 1 && buf.numberOfChannels > 1){
+    finalBuf = ctx.createBuffer(1, buf.length, buf.sampleRate);
+    const s0 = buf.getChannelData(0), s1 = buf.getChannelData(1);
+    const d = finalBuf.getChannelData(0);
+    for(let i=0;i<s0.length;i++) d[i] = (s0[i]+s1[i])*0.5;
+  }
+
+  t.buffer = finalBuf;
+  t.ui.el.querySelector(`[data-name="${t.id}"]`).textContent = file.name;
+  if(isPlaying) startTrackSource(t);
+}
+
+/* ============================================================
+   PLAYBACK
+============================================================ */
+let isPlaying = false;
+
+function startTrackSource(t){
+  if(!t.buffer) return;
+  stopTrackSource(t);
+  const src = ctx.createBufferSource();
+  src.buffer = t.buffer;
+  src.loop = true;
+  src.connect(t.input);
+  src.start();
+  t.source = src;
+}
+function stopTrackSource(t){
+  if(t.source){
+    try{t.source.stop();}catch(e){}
+    t.source.disconnect(); t.source = null;
+  }
+}
+function playAll(){
+  if(ctx.state === 'suspended') ctx.resume();
+  isPlaying = true;
+  tracks.forEach(t => { if(t.type !== 'master') startTrackSource(t); });
+}
+function stopAll(){
+  isPlaying = false;
+  tracks.forEach(stopTrackSource);
+}
+
+document.getElementById('btnPlay').onclick = e => {
+  playAll(); e.target.classList.add('active');
+  document.getElementById('btnStop').classList.remove('active');
+};
+document.getElementById('btnStop').onclick = e => {
+  stopAll(); e.target.classList.add('active');
+  document.getElementById('btnPlay').classList.remove('active');
+};
+document.getElementById('btnPanic').onclick = () => location.reload();
+
+/* ============================================================
+   MUTE / SOLO
+============================================================ */
+function applyGains(){
+  const anySolo = tracks.some(t => t.solo);
+  tracks.forEach(t => {
+    if(t.type === 'master'){ t.gain.gain.value = t.volume; return; }
+    const audible = anySolo ? (t.solo && !t.muted) : !t.muted;
+    t.gain.gain.value = audible ? t.volume : 0;
+  });
+}
+
+/* ============================================================
+   PLUGINS
+============================================================ */
+function showPluginMenu(t){
+  const names = Object.keys(PLUGINS);
+  const choice = prompt(
+    `Añadir plugin a ${t.name}:\n\n` +
+    names.map((n,i)=>`${i+1}. ${n}`).join('\n') +
+    `\n\nEscribe el número:`
+  );
+  if(!choice) return;
+  const idx = parseInt(choice)-1;
+  if(isNaN(idx) || !names[idx]) return;
+  addPlugin(t, names[idx]);
+}
+
+function addPlugin(t, name){
+  let plugin;
+  try {
+    plugin = PLUGINS[name]();
+  } catch(e){
+    console.error(e);
+    return;
+  }
+  const entry = { name, node: plugin.node, params: plugin.params || [], instance: plugin };
+  t.plugins.push(entry);
+  t.pluginChain.nodes.push(entry);
+  t.pluginChain.rebuild();
+  renderPlugins(t);
+  openEditor(t, t.plugins.length-1);
+}
+
+function removePlugin(t, i){
+  const p = t.plugins[i];
+  try{ p.node.disconnect(); }catch(e){}
+  t.plugins.splice(i,1);
+  t.pluginChain.nodes.splice(i,1);
+  t.pluginChain.rebuild();
+  closeEditor(t);
+  renderPlugins(t);
+}
+
+function renderPlugins(t){
+  const cont = t.ui.el.querySelector(`[data-plugins="${t.id}"]`);
+  cont.innerHTML = '';
+  t.plugins.forEach((p, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'plugin-slot';
+    slot.innerHTML = `
+      <span class="name" title="${p.name}">🎚️ ${p.name}</span>
+      <span>
+        <span class="x" data-edit="${i}" title="Editar">⚙</span>
+        <span class="x" data-del="${i}" title="Quitar">✕</span>
+      </span>
+    `;
+    cont.appendChild(slot);
+    slot.querySelector(`[data-del="${i}"]`).onclick = () => removePlugin(t, i);
+    slot.querySelector(`[data-edit="${i}"]`).onclick = () => openEditor(t, i);
+  });
+}
+
+/* ============================================================
+   EDITOR INLINE DE PARÁMETROS
+============================================================ */
+let openEditorInfo = null; // { track, index }
+
+function closeEditor(t){
+  if(openEditorInfo && openEditorInfo.track === t){
+    t.ui.editor.innerHTML = '';
+    openEditorInfo = null;
+  }
+}
+
+function openEditor(t, index){
+  const p = t.plugins[index];
+  if(!p) return;
+  openEditorInfo = { track: t, index };
+
+  const ed = t.ui.editor;
+  ed.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'plugin-editor';
+  wrap.innerHTML = `
+    <div class="title">
+      <span>🎚️ ${p.name}</span>
+      <span class="close" title="Cerrar">✕</span>
+    </div>
+  `;
+  wrap.querySelector('.close').onclick = () => closeEditor(t);
+
+  p.params.forEach((par, j) => {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+
+    if(par.type === 'bool'){
+      row.innerHTML = `
+        <div class="lbl"><span>${par.name}</span><span data-val>${par.value ? 'ON' : 'OFF'}</span></div>
+        <input type="checkbox" ${par.value ? 'checked' : ''}>
+      `;
+      const cb = row.querySelector('input');
+      cb.onchange = () => {
+        par.value = cb.checked ? 1 : 0;
+        par.set(par.value);
+        row.querySelector('[data-val]').textContent = cb.checked ? 'ON' : 'OFF';
+      };
+    } else {
+      row.innerHTML = `
+        <div class="lbl"><span>${par.name}</span><span data-val>${par.value}</span></div>
+        <input type="range" min="${par.min}" max="${par.max}" step="${par.step}" value="${par.value}">
+      `;
+      const rng = row.querySelector('input');
+      rng.oninput = () => {
+        const v = parseFloat(rng.value);
+        par.value = v;
+        par.set(v);
+        row.querySelector('[data-val]').textContent = (par.type === 'int') ? v : v.toFixed(2);
+      };
+    }
+    wrap.appendChild(row);
+  });
+
+  ed.appendChild(wrap);
+}
+
+/* ============================================================
+   MEDIDORES
+============================================================ */
+const meterData = tracks.map(t => new Uint8Array(t.analyser.frequencyBinCount));
+
+function animate(){
+  tracks.forEach((t, i) => {
+    t.analyser.getByteFrequencyData(meterData[i]);
+    let sum = 0;
+    for(let j=0;j<meterData[i].length;j++) sum += meterData[i][j];
+    const avg = sum / meterData[i].length;
+    const pct = Math.min(100, (avg/255)*140);
+    if(t.ui.meter) t.ui.meter.style.width = pct + '%';
+  });
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ============================================================
+   INIT
+============================================================ */
+applyGains();
+console.log('%cMiniREAPER listo','color:#4a90d9;font-weight:bold');
+console.log('Plugins:', Object.keys(PLUGINS).join(', '));
+</script>
+</body>
+</html>
